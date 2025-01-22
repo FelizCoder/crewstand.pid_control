@@ -1,67 +1,70 @@
 import json
 from fastapi import FastAPI
-from typing import Optional
+from typing import Optional, Tuple
 import websocket
 import threading
 from pydantic import BaseModel
 from simple_pid import PID
 
+from app.swncrew_backend_client.models.proportional_valve import ProportionalValve
+
+from .utils.config import config
+from .utils.influx_client import influx_connector
+
 from .swncrew_backend_client import Client
+from .swncrew_backend_client.api.proportional_valves import set_state_v1_actuators_proportional_set_post as set_proportional
 from .swncrew_backend_client.models.sensor_reading import SensorReading
 
-backend_base = "localhost:5000"  # TODO: implement pydantic settings
-# Sensor ID for the sensor WebSocket connection (UPDATE THIS TO MATCH YOUR SENSOR ID)
-sensor_id = 0  # Update this to the actual sensor ID you're connecting to
+rest_client = Client(base_url=f"http://{config.BACKEND_BASE}", timeout=0.5)
 
-rest_client = Client(base_url=f"http://{backend_base}", timeout=0.5)
+app = FastAPI(version=config.VERSION, title=config.PROJECT_NAME, debug=config.DEBUG_LEVEL == "DEBUG")
 
-app = FastAPI()
-
-# PID Controller constants
-KP = 1.0  # Proportional gain
-KI = 0.1  # Integral gain
-KD = 0.05  # Derivative gain
-
-pid = PID(KP, KI, KD, output_limits=(0, 100), auto_mode=False)
-
-# State variables
-setpoint: Optional[float] = None
-sensor_reading: Optional[float] = None
-
-
-# Pydantic model for PID output (optional, for API responses if needed)
-class PIDComponents(BaseModel):
-    P: float
-    I: float
-    D: float
-
-
-# PID Controller function
-def calculate_pid_output():
-    global sensor_reading, setpoint
-
-    output = pid(sensor_reading)
-    print(f"Calculated PID output: {output}")
-
-    return output
-
+pid = PID(config.PID_KP, config.PID_KI, config.PID_KD, output_limits=(config.PID_OUTPUT_MIN, config.PID_OUTPUT_MAX), auto_mode=False)
 
 # WebSocket connections
 setpoint_ws = None
 sensor_ws = None
 
+# State variables
+setpoint: Optional[float] = None
+sensor_reading: Optional[SensorReading] = None
+
+
+class PIDComponents(BaseModel):
+    P: float
+    I: float
+    D: float
+    
+    def new(components: Tuple[float, float, float]):
+        return PIDComponents(P=components[0], I=components[1], D=components[2])
+
+
+# PID Controller function
+def calculate_pid_update(sensor_reading: SensorReading):
+    update = pid(sensor_reading.value)
+    
+    print(f"Calculated PID Update {update}")
+
+    return update
+
+def actuator_update(update_state: float):
+    update_request = ProportionalValve(id=config.PROPORTIONAL_VALVE_ID, state=update_state)
+    update_response = set_proportional.sync(client=rest_client, body=update_request)
+    print(f"Actuator update response: {update_response}")
+        
+    influx_connector.write_pid(pid, sensor_reading.timestamp_ns)
+
 
 def on_setpoint_message(ws, message):
-    global setpoint, sensor_reading
     print(f"Received setpoint message: {message}")
 
     try:
         if message == "null":
-            setpoint = None
             pid.set_auto_mode(False)
-            print("PID set to manual mode")
+            actuator_update(0.0)
+            print("PID in manual mode")
             return
-        elif setpoint is None:
+        elif not pid.auto_mode:
             setpoint = float(message)
             pid.set_auto_mode(True, last_output=0)
             pid.setpoint = setpoint
@@ -71,23 +74,29 @@ def on_setpoint_message(ws, message):
             pid.setpoint = setpoint
             print(f"Setpoint updated to: {pid.setpoint}")
 
-        output = calculate_pid_output()
-        # TODO: Send the output to the actuator (e.g., via another WebSocket or API call)
-        print(f"PID Output: {output}")
+        output = calculate_pid_update(sensor_reading)
+        print(f"PID Update {output}")
+        
+        if output is not None:
+            actuator_update(output)
+        else:
+            print("Could not calculate PID update")
+            
     except:
         print(f"Error processing setpoint message: {message}")
+
 
 
 def on_sensor_message(ws, message):
     global sensor_reading
     print(f"Received sensor message: {message}")
     try:
-        sensor_reading = SensorReading(**json.loads(message)).value
+        sensor_reading = SensorReading(**json.loads(message))
         print(f"Sensor Reading: {sensor_reading}")
-        output = calculate_pid_output()
-        if output is not None:
-            # TODO: Send the output to the actuator (e.g., via another WebSocket or API call)
-            print(f"PID Output: {output}")
+        update = calculate_pid_update(sensor_reading)
+        print(f"PID Update {update}")
+        if update is not None:
+            actuator_update(update)
     except:
         print(f"Error processing sensor message: {message}")
 
@@ -115,7 +124,7 @@ def establish_ws_connections():
     def run_setpoint_ws():
         print("Connecting to setpoint WebSocket...")
         setpoint_ws = websocket.WebSocketApp(
-            f"ws://{backend_base}/v1/sensors/flowmeters/ws/setpoint/0",
+            f"ws://{config.BACKEND_BASE}/v1/sensors/flowmeters/ws/setpoint/0",
             on_message=on_setpoint_message,
             on_error=on_setpoint_error,
             on_close=on_setpoint_close,
@@ -125,7 +134,7 @@ def establish_ws_connections():
     def run_sensor_ws():
         print("Connecting to sensor WebSocket...")
         sensor_ws = websocket.WebSocketApp(
-            f"ws://{backend_base}/v1/sensors/flowmeters/ws/0",
+            f"ws://{config.BACKEND_BASE}/v1/sensors/flowmeters/ws/0",
             on_message=on_sensor_message,
             on_error=on_sensor_error,
             on_close=on_sensor_close,
@@ -156,8 +165,8 @@ def read_health():
 # Optional: PID Output endpoint (if you want to expose the PID output via API)
 @app.get("/pid/components", response_model=PIDComponents)
 def get_pid_output():
-    (p, i, d) = pid.components
-    return PIDComponents(P=p, I=i, D=d)
+    components = pid.components
+    return PIDComponents.new(components)
 
 
 if __name__ == "__main__":
