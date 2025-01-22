@@ -3,6 +3,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from simple_pid import PID
 
 from .config import config
+from .logger import logger
 
 
 class InfluxConnector:
@@ -72,6 +73,18 @@ class InfluxConnector:
         self.write_api = self.client.write_api(write_options=SYNCHRONOUS)
 
     def write_pid(self, pid: PID, timestamp_ns: int):
+        """
+        Write PID controller data to InfluxDB.
+        Parameters
+        ----------
+        pid : PID
+            An instance of the PID controller containing the PID components and settings.
+        timestamp_ns : int
+            The timestamp in nanoseconds to associate with the data point.
+        Returns
+        -------
+        None
+        """
         
         (p,i,d) = pid.components
         
