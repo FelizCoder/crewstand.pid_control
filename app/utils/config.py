@@ -20,8 +20,12 @@ class Config(BaseSettings):
     INFLUXDB_TOKEN: str
     INFLUXDB_URL: HttpUrl
     PROJECT_NAME: str = "swncrew pid controller"
-    PROPORTIONAL_VALVE_ID: int = Field(default=0, ge=0, description="The proportional valve to control")
-    SENSOR_ID: int = Field(default=0, ge=0, description="The sensor reading the parameter to control")
+    PROPORTIONAL_VALVE_ID: int = Field(
+        default=0, ge=0, description="The proportional valve to control"
+    )
+    SENSOR_ID: int = Field(
+        default=0, ge=0, description="The sensor reading the parameter to control"
+    )
     VERSION: str = read_version()
 
     # PID Controller constants
@@ -33,4 +37,10 @@ class Config(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env.local")
 
+
 config = Config()
+
+logger.setLevel(config.DEBUG_LEVEL.upper())
+logger.info(
+    "Start project with current configuration \n %s", config.model_dump_json(indent=2)
+)
