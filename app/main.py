@@ -6,8 +6,6 @@ import threading
 from pydantic import BaseModel
 from simple_pid import PID
 
-from app.swncrew_backend_client.models.proportional_valve import ProportionalValve
-
 from .utils.config import config
 from .utils.influx_client import influx_connector
 from .utils.logger import logger
@@ -15,16 +13,13 @@ from .utils.logger import logger
 from .swncrew_backend_client import Client
 from .swncrew_backend_client.api.proportional_valves import set_state_v1_actuators_proportional_set_post as set_proportional
 from .swncrew_backend_client.models.sensor_reading import SensorReading
+from .swncrew_backend_client.models.proportional_valve import ProportionalValve
 
 rest_client = Client(base_url=f"http://{config.BACKEND_BASE}", timeout=0.5)
 
 app = FastAPI(version=config.VERSION, title=config.PROJECT_NAME, debug=config.DEBUG_LEVEL == "DEBUG")
 
 pid = PID(config.PID_KP, config.PID_KI, config.PID_KD, output_limits=(config.PID_OUTPUT_MIN, config.PID_OUTPUT_MAX), auto_mode=False)
-
-# WebSocket connections
-setpoint_ws = None
-sensor_ws = None
 
 # State variables
 setpoint: Optional[float] = None
@@ -196,8 +191,7 @@ def establish_ws_connections():
     -------
     None
     """
-    global setpoint_ws, sensor_ws
-
+    
     def run_setpoint_ws():
         logger.info("Connecting to setpoint WebSocket...")
         setpoint_ws = websocket.WebSocketApp(
