@@ -2,55 +2,35 @@ from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from simple_pid import PID
 
-from .config import config
-from .logger import logger
+from app.utils.config import config
+from app.utils.logger import logger
 
 
 class InfluxConnector:
     """
-    Summary
-    ----------
-    Provides a synchronous interface for writing data to an InfluxDB instance.
-    Handles sensor and actuator data writes with automatic point generation.
-
-    Parameters
-    ----------
-    url : str, optional
-        InfluxDB server URL ( defaults to `settings.INFLUXDB_URL.unicode_string()` )
-    token : str, optional
-        InfluxDB authentication token ( defaults to `settings.INFLUXDB_TOKEN` )
-    org : str, optional
-        InfluxDB organization ( defaults to `settings.INFLUXDB_ORG` )
-    bucket : str, optional
-        Target InfluxDB bucket for writes ( defaults to `settings.INFLUXDB_BUCKET` )
+    InfluxConnector is a class that provides methods to connect 
+    to an InfluxDB instance and write PID controller data.
 
     Attributes
-    ----------
     bucket : str
-        Target InfluxDB bucket for writes.
+        The InfluxDB bucket where data will be written.
     client : InfluxDBClient
-        Underlying InfluxDB client instance.
+        The client instance used to interact with InfluxDB.
     write_api : WriteApi
-        Synchronous write API for the InfluxDB client.
+        The API instance used to write data to InfluxDB.
 
     Methods
-    ----------
-    write_sensor(sensor)
-        Writes a sensor reading to InfluxDB.
-    write_actuator(actuator, timestamp_ns)
-        Writes an actuator state to InfluxDB with a specified timestamp.
+    __init__(
+        url=config.INFLUXDB_URL.unicode_string(),
+        token=config.INFLUXDB_TOKEN,
+        org=config.INFLUXDB_ORG,
+        bucket=config.INFLUXDB_BUCKET
+    )
+        Initializes the InfluxConnector with the specified InfluxDB connection parameters.
+    write_pid(pid: PID, timestamp_ns: int)
+        Writes PID controller data to InfluxDB.
     _write(point)
-        Internal method for writing a pre-constructed InfluxDB point.
-
-    Raises
-    ----------
-    ConnectionError
-        If a connection issue occurs while writing to InfluxDB, an error is logged.
-
-    Notes
-    -----
-    This class is designed for synchronous use. For asynchronous operations, consider using the asynchronous InfluxDB client.
-    Instance configuration is primarily driven by the application's settings module.
+        Writes a data point to InfluxDB and handles exceptions.
     """
 
     def __init__(
@@ -85,9 +65,9 @@ class InfluxConnector:
         -------
         None
         """
-        
-        (p,i,d) = pid.components
-        
+
+        (p, i, d) = pid.components
+
         point = (
             Point("PID")
             .field("P", p)
@@ -98,10 +78,9 @@ class InfluxConnector:
             .time(timestamp_ns, WritePrecision.NS)
             .tag("sensor_id", config.SENSOR_ID)
         )
-        
+
         self._write(point)
-        
-    
+
     def _write(self, point):
         try:
             self.write_api.write(bucket=self.bucket, record=point)
