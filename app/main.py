@@ -31,6 +31,18 @@ sensor_reading: Optional[SensorReading] = None
 
 
 class PIDComponents(BaseModel):
+    """
+    Model representing the components of a PID controller output.
+
+    Parameters
+    ----------
+    P : float
+        Proportional component of the PID output
+    I : float
+        Integral component of the PID output
+    D : float
+        Derivative component of the PID output
+    """
     P: float
     I: float
     D: float
@@ -40,14 +52,39 @@ class PIDComponents(BaseModel):
 
 
 # PID Controller function
-def calculate_pid_update(sensor_reading: SensorReading):
+def calculate_pid_update(sensor_reading: SensorReading) -> float:
+    """
+    Calculate PID controller update based on sensor reading.
+
+    Parameters
+    ----------
+    sensor_reading : SensorReading
+        Current sensor reading containing value and timestamp
+
+    Returns
+    -------
+    float
+        Calculated PID update value
+    """
     update = pid(sensor_reading.value)
     
     print(f"Calculated PID Update {update}")
 
     return update
 
-def actuator_update(update_state: float):
+def actuator_update(update_state: float) -> None:
+    """
+    Update the actuator with new PID controller output.
+
+    Parameters
+    ----------
+    update_state : float
+        New state value for the proportional valve
+
+    Returns
+    -------
+    None
+    """
     update_request = ProportionalValve(id=config.PROPORTIONAL_VALVE_ID, state=update_state)
     update_response = set_proportional.sync(client=rest_client, body=update_request)
     print(f"Actuator update response: {update_response}")
@@ -56,6 +93,20 @@ def actuator_update(update_state: float):
 
 
 def on_setpoint_message(ws, message):
+    """
+    WebSocket callback for handling setpoint messages.
+
+    Parameters
+    ----------
+    ws : WebSocket
+        WebSocket connection instance
+    message : str
+        Received message containing new setpoint value
+
+    Returns
+    -------
+    None
+    """
     print(f"Received setpoint message: {message}")
 
     try:
@@ -88,6 +139,20 @@ def on_setpoint_message(ws, message):
 
 
 def on_sensor_message(ws, message):
+    """
+    WebSocket callback for handling sensor messages.
+
+    Parameters
+    ----------
+    ws : WebSocket
+        WebSocket connection instance
+    message : str
+        Received message containing sensor reading data
+
+    Returns
+    -------
+    None
+    """
     global sensor_reading
     print(f"Received sensor message: {message}")
     try:
@@ -119,6 +184,17 @@ def on_sensor_close(ws, close_status_code, close_msg):
 
 # Establish WebSocket connections in separate threads to avoid blocking
 def establish_ws_connections():
+    """
+    Establish WebSocket connections for setpoint and sensor data.
+
+    Creates and starts two daemon threads for handling WebSocket connections:
+    - Setpoint WebSocket: receives target values
+    - Sensor WebSocket: receives current sensor readings
+
+    Returns
+    -------
+    None
+    """
     global setpoint_ws, sensor_ws
 
     def run_setpoint_ws():
@@ -159,12 +235,28 @@ thread.start()
 # Health check endpoint
 @app.get("/health")
 def read_health():
+    """
+    Health check endpoint.
+
+    Returns
+    -------
+    dict
+        Dictionary containing service status
+    """
     return {"status": "ok"}
 
 
 # Optional: PID Output endpoint (if you want to expose the PID output via API)
 @app.get("/pid/components", response_model=PIDComponents)
 def get_pid_output():
+    """
+    Endpoint to retrieve current PID controller components.
+
+    Returns
+    -------
+    PIDComponents
+        Object containing current P, I, and D components
+    """
     components = pid.components
     return PIDComponents.new(components)
 
