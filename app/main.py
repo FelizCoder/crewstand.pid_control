@@ -8,6 +8,7 @@ from simple_pid import PID
 
 from .utils.config import config
 from .utils.influx_client import influx_connector
+from .utils.logger import logger
 
 from .swncrew_backend_client import Client
 from .swncrew_backend_client.api.proportional_valves import (
@@ -76,7 +77,7 @@ def calculate_pid_update(sensor_reading: SensorReading) -> float:
     """
     update = pid(sensor_reading.value)
 
-    print(f"Calculated PID Update {update}")
+    logger.debug(f"Calculated PID Update {update}")
 
     return update
 
@@ -98,7 +99,7 @@ def actuator_update(update_state: float) -> None:
         id=config.PROPORTIONAL_VALVE_ID, state=update_state
     )
     update_response = set_proportional.sync(client=rest_client, body=update_request)
-    print(f"Actuator update response: {update_response}")
+    logger.debug(f"Actuator update response: {update_response}")
 
     influx_connector.write_pid(pid, sensor_reading.timestamp_ns)
 
@@ -118,34 +119,34 @@ def on_setpoint_message(ws, message):
     -------
     None
     """
-    print(f"Received setpoint message: {message}")
+    logger.debug(f"Received setpoint message: {message}")
 
     try:
         if message == "null":
             pid.set_auto_mode(False)
             actuator_update(0.0)
-            print("PID in manual mode")
+            logger.debug("PID in manual mode")
             return
         elif not pid.auto_mode:
             setpoint = float(message)
             pid.set_auto_mode(True, last_output=0)
             pid.setpoint = setpoint
-            print(f"PID set to auto mode with setpoint: {pid.setpoint}")
+            logger.debug(f"PID set to auto mode with setpoint: {pid.setpoint}")
         else:
             setpoint = float(message)
             pid.setpoint = setpoint
-            print(f"Setpoint updated to: {pid.setpoint}")
+            logger.debug(f"Setpoint updated to: {pid.setpoint}")
 
         output = calculate_pid_update(sensor_reading)
-        print(f"PID Update {output}")
+        logger.debug(f"PID Update {output}")
 
         if output is not None:
             actuator_update(output)
         else:
-            print("Could not calculate PID update")
+            logger.error("Could not calculate PID update")
 
     except:
-        print(f"Error processing setpoint message: {message}")
+        logger.error(f"Error processing setpoint message: {message}")
 
 
 def on_sensor_message(ws, message):
@@ -164,32 +165,32 @@ def on_sensor_message(ws, message):
     None
     """
     global sensor_reading
-    print(f"Received sensor message: {message}")
+    logger.debug(f"Received sensor message: {message}")
     try:
         sensor_reading = SensorReading(**json.loads(message))
-        print(f"Sensor Reading: {sensor_reading}")
+        logger.debug(f"Sensor Reading: {sensor_reading}")
         update = calculate_pid_update(sensor_reading)
-        print(f"PID Update {update}")
+        logger.debug(f"PID Update {update}")
         if update is not None:
             actuator_update(update)
     except:
-        print(f"Error processing sensor message: {message}")
+        logger.error(f"Error processing sensor message: {message}")
 
 
 def on_setpoint_error(ws, error):
-    print(f"Setpoint WebSocket Error: {error}")
+    logger.error(f"Setpoint WebSocket Error: {error}")
 
 
 def on_sensor_error(ws, error):
-    print(f"Sensor WebSocket Error: {error}")
+    logger.error(f"Sensor WebSocket Error: {error}")
 
 
 def on_setpoint_close(ws, close_status_code, close_msg):
-    print("Setpoint WebSocket Closed")
+    logger.info("Setpoint WebSocket Closed")
 
 
 def on_sensor_close(ws, close_status_code, close_msg):
-    print("Sensor WebSocket Closed")
+    logger.info("Sensor WebSocket Closed")
 
 
 # Establish WebSocket connections in separate threads to avoid blocking
@@ -208,7 +209,7 @@ def establish_ws_connections():
     global setpoint_ws, sensor_ws
 
     def run_setpoint_ws():
-        print("Connecting to setpoint WebSocket...")
+        logger.info("Connecting to setpoint WebSocket...")
         setpoint_ws = websocket.WebSocketApp(
             f"ws://{config.BACKEND_BASE}/v1/sensors/flowmeters/ws/setpoint/0",
             on_message=on_setpoint_message,
@@ -218,7 +219,7 @@ def establish_ws_connections():
         setpoint_ws.run_forever()
 
     def run_sensor_ws():
-        print("Connecting to sensor WebSocket...")
+        logger.info("Connecting to sensor WebSocket...")
         sensor_ws = websocket.WebSocketApp(
             f"ws://{config.BACKEND_BASE}/v1/sensors/flowmeters/ws/0",
             on_message=on_sensor_message,
