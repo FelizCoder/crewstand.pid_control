@@ -8,7 +8,7 @@ from app.utils.logger import logger
 
 class InfluxConnector:
     """
-    InfluxConnector is a class that provides methods to connect 
+    InfluxConnector is a class that provides methods to connect
     to an InfluxDB instance and write PID controller data.
 
     Attributes
@@ -70,11 +70,11 @@ class InfluxConnector:
 
         point = (
             Point("PID")
-            .field("P", p)
-            .field("I", i)
-            .field("D", d)
-            .field("setpoint", pid.setpoint)
-            .field("auto_mode", pid.auto_mode)
+            .field("P", float(p))
+            .field("I", float(i))
+            .field("D", float(d))
+            .field("setpoint", float(pid.setpoint))
+            .field("auto_mode", bool(pid.auto_mode))
             .time(timestamp_ns, WritePrecision.NS)
             .tag("sensor_id", config.SENSOR_ID)
         )
