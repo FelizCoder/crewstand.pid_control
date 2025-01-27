@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1](https://github.com/FelizCoder/crewstand.pid_control/compare/v0.0.0...v0.0.1) (2025-01-27)
+
+
+### Bug Fixes
+
+* **influx_client:** Ensure float type consistency for PID values ([b88e5f1](https://github.com/FelizCoder/crewstand.pid_control/commit/b88e5f1c5e4549b17fcaaa09787553170b7100f2))
+
 ## 0.0.0 (2025-01-23)
 
 
