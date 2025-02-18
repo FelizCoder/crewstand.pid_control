@@ -19,9 +19,13 @@ class PIDController(ControllerInterface):
         )
 
     def calculate_update(self, sensor_reading: SensorReading) -> Optional[float]:
-        update = self.pid(sensor_reading.value)
-        logger.debug(f"Calculated PID Update {update}")
-        influx_connector.write_pid(self.pid, sensor_reading.timestamp_ns)
+        if self.pid.auto_mode:
+            update = self.pid(sensor_reading.value)
+            logger.debug(f"Calculated PID Update {update}")
+            influx_connector.write_pid(self.pid, sensor_reading.timestamp_ns)
+        else:
+            update = None
+
         return update
 
     def set_setpoint(self, setpoint: Optional[float]) -> None:
