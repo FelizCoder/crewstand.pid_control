@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.2](https://github.com/FelizCoder/crewstand.pid_control/compare/v0.0.1...v0.0.2) (2025-02-18)
+
+
+### Bug Fixes
+
+* **pid:** add auto_mode check in PID update calculation ([f6cb5e5](https://github.com/FelizCoder/crewstand.pid_control/commit/f6cb5e5733eaa9057d778df76d6563c4e87cebec)), closes [#9](https://github.com/FelizCoder/crewstand.pid_control/issues/9)
+
 ## [0.0.1](https://github.com/FelizCoder/crewstand.pid_control/compare/v0.0.0...v0.0.1) (2025-01-27)
 
 
